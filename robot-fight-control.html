@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ROBOWAR — Control Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #060810;
+    --panel: #0d1117;
+    --border: #1e2535;
+    --p1: #00f0ff;
+    --p1-dim: #004d55;
+    --p2: #ff3366;
+    --p2-dim: #55001a;
+    --neutral: #f0b429;
+    --text: #c8d6e5;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Orbitron', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(0,240,255,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 50%, rgba(255,51,102,0.04) 0%, transparent 60%);
+  }
+
+  /* ── SCANLINE overlay ── */
+  body::after {
+    content:'';
+    position:fixed;
+    inset:0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events:none;
+    z-index:9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top:0;
+    z-index:100;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 6px;
+    background: linear-gradient(90deg, var(--p1), var(--neutral), var(--p2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .ws-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .ws-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #444;
+    transition: background .3s;
+    box-shadow: 0 0 0 0 transparent;
+  }
+  .ws-dot.connected { background: #00ff88; box-shadow: 0 0 8px #00ff88; animation: pulse 2s infinite; }
+  .ws-dot.connecting { background: var(--neutral); animation: blink .8s infinite; }
+  .ws-dot.error { background: var(--p2); box-shadow: 0 0 8px var(--p2); }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  .header-controls {
+    display:flex; gap:12px; align-items:center;
+  }
+  .btn-sm {
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all .2s;
+  }
+  .btn-sm:hover { border-color: var(--neutral); color: var(--neutral); }
+  .btn-sm.danger { border-color: var(--p2-dim); color: var(--p2); }
+  .btn-sm.danger:hover { background: var(--p2); color: #000; border-color: var(--p2); }
+
+  /* ── MAIN GRID ── */
+  .arena {
+    display: grid;
+    grid-template-columns: 300px 1fr 300px;
+    grid-template-rows: auto 1fr auto;
+    gap: 0;
+    height: calc(100vh - 57px);
+  }
+
+  /* ── CAMERA FEED ── */
+  .camera-section {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    position: relative;
+  }
+
+  .camera-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,17,23,0.8);
+  }
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--p2);
+    font-family: var(--display);
+    font-weight: 700;
+  }
+  .live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--p2);
+    box-shadow: 0 0 10px var(--p2);
+    animation: pulse 1s infinite;
+  }
+  .cam-meta { font-size: 10px; letter-spacing: 1px; opacity: .5; }
+
+  .camera-feed {
+    flex: 1;
+    position: relative;
+    background: #000;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #videoFeed {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+
+  .cam-placeholder {
+    text-align: center;
+    opacity: .25;
+  }
+  .cam-placeholder svg { width: 64px; fill: var(--text); margin-bottom: 12px; }
+  .cam-placeholder p { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; }
+
+  /* Grid overlay on camera */
+  .camera-feed::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(0,240,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,240,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none;
+    z-index:2;
+  }
+
+  /* Corner brackets */
+  .cam-bracket { position:absolute; width:30px; height:30px; z-index:3; }
+  .cam-bracket.tl { top:12px; left:12px; border-top:2px solid var(--p1); border-left:2px solid var(--p1); }
+  .cam-bracket.tr { top:12px; right:12px; border-top:2px solid var(--p2); border-right:2px solid var(--p2); }
+  .cam-bracket.bl { bottom:12px; left:12px; border-bottom:2px solid var(--p1); border-left:2px solid var(--p1); }
+  .cam-bracket.br { bottom:12px; right:12px; border-bottom:2px solid var(--p2); border-right:2px solid var(--p2); }
+
+  /* crosshair */
+  .crosshair {
+    position:absolute;
+    z-index:3;
+    opacity:.15;
+    pointer-events:none;
+  }
+  .crosshair::before, .crosshair::after {
+    content:'';
+    position:absolute;
+    background: var(--neutral);
+  }
+  .crosshair::before { width:1px; height:24px; left:50%; top:50%; transform:translate(-50%,-50%); }
+  .crosshair::after  { width:24px; height:1px; left:50%; top:50%; transform:translate(-50%,-50%); }
+
+  /* ── HEALTH BARS ── */
+  .hud-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,17,23,0.9);
+  }
+
+  .hp-label {
+    font-family: var(--display);
+    font-size: 9px;
+    letter-spacing: 2px;
+    min-width: 60px;
+    text-transform: uppercase;
+  }
+  .hp-label.p1 { color: var(--p1); text-align: right; }
+  .hp-label.p2 { color: var(--p2); }
+
+  .hp-track {
+    flex: 1;
+    height: 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    position: relative;
+  }
+  .hp-fill {
+    height: 100%;
+    transition: width .4s ease;
+    position: relative;
+  }
+  .hp-fill.p1 {
+    background: linear-gradient(90deg, var(--p1-dim), var(--p1));
+    box-shadow: 0 0 12px var(--p1);
+    margin-left: auto;
+  }
+  .hp-fill.p2 {
+    background: linear-gradient(90deg, var(--p2), var(--p2-dim));
+    box-shadow: 0 0 12px var(--p2);
+  }
+
+  .vs-label {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 900;
+    color: var(--neutral);
+    min-width: 28px;
+    text-align: center;
+    text-shadow: 0 0 12px var(--neutral);
+  }
+
+  /* ── PLAYER PANELS ── */
+  .player-panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .player-panel.p2 { border-right: none; border-left: 1px solid var(--border); }
+
+  .panel-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,17,23,0.9);
+  }
+  .player-id {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 3px;
+  }
+  .p1 .player-id { color: var(--p1); text-shadow: 0 0 20px var(--p1); }
+  .p2-panel .player-id { color: var(--p2); text-shadow: 0 0 20px var(--p2); }
+
+  .player-sub {
+    font-size: 10px;
+    letter-spacing: 2px;
+    opacity: .5;
+    margin-top: 2px;
+  }
+
+  .panel-body {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── D-PAD ── */
+  .dpad-section { }
+  .section-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    opacity: .4;
+    margin-bottom: 10px;
+  }
+
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 52px);
+    grid-template-rows: repeat(3, 52px);
+    gap: 4px;
+    width: fit-content;
+    margin: 0 auto;
+  }
+
+  .dkey {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    cursor: pointer;
+    font-size: 18px;
+    transition: all .1s;
+    user-select: none;
+    border-radius: 3px;
+    color: rgba(255,255,255,.4);
+    position: relative;
+    overflow: hidden;
+  }
+  .dkey::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    opacity:0;
+    transition: opacity .1s;
+  }
+  .p1-panel .dkey::before { background: radial-gradient(circle, rgba(0,240,255,.3), transparent); }
+  .p2-panel .dkey::before { background: radial-gradient(circle, rgba(255,51,102,.3), transparent); }
+
+  .dkey:active::before, .dkey.active::before { opacity:1; }
+  .dkey:active, .dkey.active {
+    transform: scale(.93);
+    border-color: currentColor;
+  }
+  .p1-panel .dkey:active, .p1-panel .dkey.active { border-color: var(--p1); color: var(--p1); box-shadow: 0 0 14px rgba(0,240,255,.5); }
+  .p2-panel .dkey:active, .p2-panel .dkey.active { border-color: var(--p2); color: var(--p2); box-shadow: 0 0 14px rgba(255,51,102,.5); }
+
+  .dkey.empty { visibility: hidden; }
+  .dkey.center { cursor: default; background: rgba(255,255,255,.02); }
+
+  /* ── ATTACK BUTTONS ── */
+  .attacks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .atk-btn {
+    padding: 12px 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: all .15s;
+    text-align: center;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+  }
+  .atk-btn::after {
+    content: attr(data-key);
+    position:absolute;
+    top:4px; right:6px;
+    font-size:8px;
+    opacity:.3;
+  }
+  .p1-panel .atk-btn:hover, .p1-panel .atk-btn:active {
+    border-color: var(--p1);
+    color: var(--p1);
+    background: rgba(0,240,255,.07);
+    box-shadow: 0 0 16px rgba(0,240,255,.2);
+  }
+  .p2-panel .atk-btn:hover, .p2-panel .atk-btn:active {
+    border-color: var(--p2);
+    color: var(--p2);
+    background: rgba(255,51,102,.07);
+    box-shadow: 0 0 16px rgba(255,51,102,.2);
+  }
+
+  /* ── CONNECTION FORM ── */
+  .conn-section {
+    border-top: 1px solid var(--border);
+    padding: 12px;
+  }
+  .input-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .field {
+    flex: 1;
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .p1-panel .field:focus { border-color: var(--p1); }
+  .p2-panel .field:focus { border-color: var(--p2); }
+
+  .btn-connect {
+    padding: 7px 14px;
+    border: 1px solid;
+    background: transparent;
+    font-family: var(--display);
+    font-size: 9px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all .2s;
+    white-space: nowrap;
+  }
+  .p1-panel .btn-connect { border-color: var(--p1); color: var(--p1); }
+  .p1-panel .btn-connect:hover { background: var(--p1); color: #000; }
+  .p2-panel .btn-connect { border-color: var(--p2); color: var(--p2); }
+  .p2-panel .btn-connect:hover { background: var(--p2); color: #000; }
+
+  /* ── CMD LOG ── */
+  .log-section {
+    grid-column: 1 / 4;
+    border-top: 1px solid var(--border);
+    display: flex;
+    height: 120px;
+    overflow: hidden;
+  }
+  .log-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-size: 10px;
+    line-height: 1.8;
+  }
+  .log-panel::-webkit-scrollbar { width: 3px; }
+  .log-panel::-webkit-scrollbar-thumb { background: var(--border); }
+  .log-panel + .log-panel { border-left: 1px solid var(--border); }
+  .log-header {
+    font-size: 9px;
+    letter-spacing: 3px;
+    opacity: .4;
+    text-transform: uppercase;
+    padding: 8px 12px 0;
+    border-top: 0;
+  }
+
+  .log-entry { display: flex; gap: 8px; }
+  .log-time { opacity: .35; min-width: 60px; }
+  .log-cmd.p1 { color: var(--p1); }
+  .log-cmd.p2 { color: var(--p2); }
+
+  /* ── KEYBOARD HINTS ── */
+  .key-hints {
+    font-size: 9px;
+    letter-spacing: 1px;
+    opacity: .3;
+    text-align: center;
+    line-height: 2;
+  }
+
+  /* ── TIMER ── */
+  .timer-display {
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--neutral);
+    text-shadow: 0 0 20px var(--neutral);
+    text-align: center;
+    letter-spacing: 4px;
+  }
+  .timer-display.danger { color: var(--p2); text-shadow: 0 0 20px var(--p2); animation: blink .5s infinite; }
+
+  /* ── MATCH CONTROLS ── */
+  .match-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .btn-match {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--neutral);
+    background: transparent;
+    color: var(--neutral);
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-match:hover { background: var(--neutral); color: #000; }
+  .btn-match:disabled { opacity: .3; cursor: not-allowed; }
+  .btn-match.stop { border-color: var(--p2); color: var(--p2); }
+  .btn-match.stop:hover { background: var(--p2); color: #fff; }
+
+  /* ── ROBOT STATUS BARS ── */
+  .robot-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .stat-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+  .stat-name { min-width: 48px; text-transform: uppercase; opacity: .5; }
+  .stat-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .stat-fill {
+    height: 100%;
+    transition: width .5s ease;
+  }
+  .p1-panel .stat-fill { background: var(--p1); box-shadow: 0 0 6px var(--p1); }
+  .p2-panel .stat-fill { background: var(--p2); box-shadow: 0 0 6px var(--p2); }
+  .stat-val { min-width: 28px; text-align: right; }
+
+  /* ── NOTIFICATION TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: 130px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(13,17,23,0.95);
+    border: 1px solid var(--neutral);
+    color: var(--neutral);
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 3px;
+    padding: 10px 24px;
+    opacity: 0;
+    transition: all .3s;
+    z-index: 1000;
+    pointer-events: none;
+    text-transform: uppercase;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ROBOWAR</div>
+  <div class="ws-status">
+    <div class="ws-dot" id="wsDot"></div>
+    <span id="wsLabel">DESCONECTADO</span>
+  </div>
+  <div class="header-controls">
+    <button class="btn-sm" onclick="connectWS()">Conectar WS</button>
+    <button class="btn-sm" onclick="connectCamera()">Cámara</button>
+    <button class="btn-sm danger" onclick="emergencyStop()">⚠ STOP</button>
+  </div>
+</header>
+
+<div class="arena">
+
+  <!-- ══ PLAYER 1 PANEL ══ -->
+  <div class="player-panel p1-panel">
+    <div class="panel-header p1">
+      <div class="player-id">ROBOT 01</div>
+      <div class="player-sub">JUGADOR 1 · WASD + F/G/H/V</div>
+    </div>
+    <div class="panel-body">
+
+      <div class="robot-stats">
+        <div class="section-label">Estado del robot</div>
+        <div class="stat-row"><span class="stat-name">Batería</span><div class="stat-bar"><div class="stat-fill" id="p1-battery" style="width:85%"></div></div><span class="stat-val" id="p1-bat-val">85%</span></div>
+        <div class="stat-row"><span class="stat-name">Señal</span><div class="stat-bar"><div class="stat-fill" id="p1-signal" style="width:72%"></div></div><span class="stat-val" id="p1-sig-val">72%</span></div>
+        <div class="stat-row"><span class="stat-name">Temp</span><div class="stat-bar"><div class="stat-fill" id="p1-temp" style="width:40%"></div></div><span class="stat-val" id="p1-tmp-val">40°</span></div>
+      </div>
+
+      <div class="dpad-section">
+        <div class="section-label">Movimiento</div>
+        <div class="dpad">
+          <div class="dkey empty"></div>
+          <div class="dkey" id="p1-up"    data-player="1" data-cmd="UP">▲</div>
+          <div class="dkey empty"></div>
+          <div class="dkey" id="p1-left"  data-player="1" data-cmd="LEFT">◀</div>
+          <div class="dkey center"></div>
+          <div class="dkey" id="p1-right" data-player="1" data-cmd="RIGHT">▶</div>
+          <div class="dkey empty"></div>
+          <div class="dkey" id="p1-down"  data-player="1" data-cmd="DOWN">▼</div>
+          <div class="dkey empty"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Ataques</div>
+        <div class="attacks">
+          <button class="atk-btn" data-player="1" data-cmd="PUNCH_L" data-key="F">Golpe L</button>
+          <button class="atk-btn" data-player="1" data-cmd="PUNCH_R" data-key="G">Golpe R</button>
+          <button class="atk-btn" data-player="1" data-cmd="KICK"    data-key="H">Patada</button>
+          <button class="atk-btn" data-player="1" data-cmd="SPECIAL" data-key="V">Especial</button>
+        </div>
+      </div>
+
+      <div class="key-hints">
+        WASD · movimiento<br>
+        F G · golpes · H · patada · V · especial
+      </div>
+    </div>
+
+    <div class="conn-section">
+      <div class="section-label">Conexión Robot 1</div>
+      <div class="input-row">
+        <input class="field" id="p1-ip" placeholder="192.168.1.100" value="192.168.1.100"/>
+        <input class="field" id="p1-port" placeholder="8080" value="8080" style="max-width:70px"/>
+        <button class="btn-connect" onclick="connectRobot(1)">Link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ CAMERA CENTER ══ -->
+  <div class="camera-section">
+    <div class="camera-header">
+      <div class="live-badge"><div class="live-dot" id="liveDot" style="background:#444;box-shadow:none;animation:none"></div>LIVE FEED</div>
+      <div class="cam-meta" id="camMeta">CAM://NO SIGNAL · 0fps</div>
+    </div>
+
+    <div class="hud-bar">
+      <span class="hp-label p1" id="p1-hp-label">100</span>
+      <div class="hp-track" style="direction:rtl">
+        <div class="hp-fill p1" id="p1-hp" style="width:100%"></div>
+      </div>
+      <span class="vs-label">VS</span>
+      <div class="hp-track">
+        <div class="hp-fill p2" id="p2-hp" style="width:100%"></div>
+      </div>
+      <span class="hp-label p2" id="p2-hp-label">100</span>
+    </div>
+
+    <div class="camera-feed">
+      <video id="videoFeed" autoplay muted playsinline></video>
+      <div class="cam-placeholder" id="camPlaceholder">
+        <svg viewBox="0 0 24 24"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        <p>Sin señal de cámara</p>
+        <p style="font-size:9px;margin-top:6px;opacity:.5">Presiona "Cámara" para iniciar stream</p>
+      </div>
+      <div class="cam-bracket tl"></div>
+      <div class="cam-bracket tr"></div>
+      <div class="cam-bracket bl"></div>
+      <div class="cam-bracket br"></div>
+      <div class="crosshair"></div>
+    </div>
+
+    <div class="match-controls">
+      <div class="timer-display" id="timerDisplay">03:00</div>
+      <button class="btn-match" id="startBtn" onclick="startMatch()">▶ INICIAR PELEA</button>
+      <button class="btn-match stop" id="stopBtn" onclick="stopMatch()" disabled>■ DETENER</button>
+    </div>
+  </div>
+
+  <!-- ══ PLAYER 2 PANEL ══ -->
+  <div class="player-panel p2-panel">
+    <div class="panel-header">
+      <div class="player-id" style="text-align:right">ROBOT 02</div>
+      <div class="player-sub" style="text-align:right">JUGADOR 2 · FLECHAS + NUMPAD</div>
+    </div>
+    <div class="panel-body">
+
+      <div class="robot-stats">
+        <div class="section-label">Estado del robot</div>
+        <div class="stat-row"><span class="stat-name">Batería</span><div class="stat-bar"><div class="stat-fill" id="p2-battery" style="width:92%"></div></div><span class="stat-val" id="p2-bat-val">92%</span></div>
+        <div class="stat-row"><span class="stat-name">Señal</span><div class="stat-bar"><div class="stat-fill" id="p2-signal" style="width:65%"></div></div><span class="stat-val" id="p2-sig-val">65%</span></div>
+        <div class="stat-row"><span class="stat-name">Temp</span><div class="stat-bar"><div class="stat-fill" id="p2-temp" style="width:33%"></div></div><span class="stat-val" id="p2-tmp-val">33°</span></div>
+      </div>
+
+      <div class="dpad-section">
+        <div class="section-label">Movimiento</div>
+        <div class="dpad">
+          <div class="dkey empty"></div>
+          <div class="dkey" id="p2-up"    data-player="2" data-cmd="UP">▲</div>
+          <div class="dkey empty"></div>
+          <div class="dkey" id="p2-left"  data-player="2" data-cmd="LEFT">◀</div>
+          <div class="dkey center"></div>
+          <div class="dkey" id="p2-right" data-player="2" data-cmd="RIGHT">▶</div>
+          <div class="dkey empty"></div>
+          <div class="dkey" id="p2-down"  data-player="2" data-cmd="DOWN">▼</div>
+          <div class="dkey empty"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Ataques</div>
+        <div class="attacks">
+          <button class="atk-btn" data-player="2" data-cmd="PUNCH_L" data-key="NUM4">Golpe L</button>
+          <button class="atk-btn" data-player="2" data-cmd="PUNCH_R" data-key="NUM5">Golpe R</button>
+          <button class="atk-btn" data-player="2" data-cmd="KICK"    data-key="NUM6">Patada</button>
+          <button class="atk-btn" data-player="2" data-cmd="SPECIAL" data-key="NUM0">Especial</button>
+        </div>
+      </div>
+
+      <div class="key-hints">
+        ↑↓←→ · movimiento<br>
+        Num4 Num5 · golpes · Num6 · patada · Num0 · especial
+      </div>
+    </div>
+
+    <div class="conn-section">
+      <div class="section-label">Conexión Robot 2</div>
+      <div class="input-row">
+        <input class="field" id="p2-ip" placeholder="192.168.1.101" value="192.168.1.101"/>
+        <input class="field" id="p2-port" placeholder="8080" value="8080" style="max-width:70px"/>
+        <button class="btn-connect" onclick="connectRobot(2)">Link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ COMMAND LOG ══ -->
+  <div class="log-section">
+    <div style="display:flex;flex-direction:column;flex:1;border-right:1px solid var(--border);">
+      <div class="log-header" style="color:var(--p1)">◈ LOG ROBOT 01</div>
+      <div class="log-panel" id="log1"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;flex:1;">
+      <div class="log-header" style="color:var(--p2)">◈ LOG ROBOT 02</div>
+      <div class="log-panel" id="log2"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+const state = {
+  ws: null, wsConnected: false,
+  robot1: null, robot2: null,
+  cameraStream: null,
+  matchActive: false,
+  matchTime: 180, // seconds
+  timerInterval: null,
+  hp: { 1: 100, 2: 100 },
+  pressedKeys: new Set()
+};
+
+// ─── WEBSOCKET ───────────────────────────────────────────────────────────────
+function connectWS() {
+  const url = prompt('WebSocket URL del servidor:', 'ws://localhost:9000');
+  if (!url) return;
+  updateWS('connecting', 'CONECTANDO...');
+  try {
+    state.ws = new WebSocket(url);
+    state.ws.onopen  = () => { updateWS('connected', 'CONECTADO'); toast('WebSocket conectado'); };
+    state.ws.onclose = () => { updateWS('',          'DESCONECTADO'); };
+    state.ws.onerror = () => { updateWS('error',     'ERROR WS'); };
+    state.ws.onmessage = (e) => handleServerMessage(JSON.parse(e.data));
+  } catch(err) { updateWS('error', 'ERROR WS'); }
+}
+
+function updateWS(cls, label) {
+  const dot = document.getElementById('wsDot');
+  dot.className = 'ws-dot ' + cls;
+  document.getElementById('wsLabel').textContent = label;
+}
+
+function sendCommand(player, cmd) {
+  const payload = {
+    type: 'CMD',
+    player,
+    cmd,
+    ts: Date.now()
+  };
+
+  // send via WebSocket if connected
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify(payload));
+  }
+
+  // send via robot direct HTTP if connected
+  const robotConn = state['robot' + player];
+  if (robotConn) {
+    fetch(`http://${robotConn.ip}:${robotConn.port}/cmd`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(() => {}); // fire and forget
+  }
+
+  logCmd(player, cmd);
+  flashDpad(player, cmd);
+}
+
+function handleServerMessage(msg) {
+  if (msg.type === 'HP_UPDATE') {
+    setHP(1, msg.hp1);
+    setHP(2, msg.hp2);
+  }
+  if (msg.type === 'MATCH_END') {
+    stopMatch();
+    toast(`¡PELEA TERMINADA! Ganador: Robot 0${msg.winner}`);
+  }
+}
+
+// ─── ROBOT CONNECTION ─────────────────────────────────────────────────────────
+function connectRobot(player) {
+  const ip   = document.getElementById(`p${player}-ip`).value.trim();
+  const port = document.getElementById(`p${player}-port`).value.trim();
+  if (!ip || !port) return;
+  state['robot' + player] = { ip, port };
+  toast(`Robot 0${player} enlazado → ${ip}:${port}`);
+}
+
+// ─── CAMERA ──────────────────────────────────────────────────────────────────
+async function connectCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    state.cameraStream = stream;
+    const video = document.getElementById('videoFeed');
+    video.srcObject = stream;
+    video.style.display = 'block';
+    document.getElementById('camPlaceholder').style.display = 'none';
+    const liveDot = document.getElementById('liveDot');
+    liveDot.style.background = 'var(--p2)';
+    liveDot.style.boxShadow = '0 0 10px var(--p2)';
+    liveDot.style.animation = 'pulse 1s infinite';
+    document.getElementById('camMeta').textContent = 'CAM://LOCAL · 30fps';
+    toast('Stream de cámara activo');
+    // Simulate FPS counter
+    let fps = 0;
+    video.onloadedmetadata = () => { fps = 30; };
+  } catch(err) {
+    toast('No se pudo acceder a la cámara: ' + err.message);
+  }
+}
+
+// ─── MATCH TIMER ─────────────────────────────────────────────────────────────
+function startMatch() {
+  if (state.matchActive) return;
+  state.matchActive = true;
+  state.matchTime = 180;
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('stopBtn').disabled  = false;
+  toast('¡PELEA INICIADA!');
+
+  // Notify server
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({ type: 'MATCH_START', ts: Date.now() }));
+  }
+
+  state.timerInterval = setInterval(() => {
+    state.matchTime--;
+    updateTimer();
+    if (state.matchTime <= 0) stopMatch();
+  }, 1000);
+}
+
+function stopMatch() {
+  state.matchActive = false;
+  clearInterval(state.timerInterval);
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('stopBtn').disabled  = true;
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({ type: 'MATCH_STOP', ts: Date.now() }));
+  }
+}
+
+function updateTimer() {
+  const m = Math.floor(state.matchTime / 60);
+  const s = state.matchTime % 60;
+  const el = document.getElementById('timerDisplay');
+  el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  el.className = 'timer-display' + (state.matchTime <= 30 ? ' danger' : '');
+}
+
+// ─── HEALTH BARS ──────────────────────────────────────────────────────────────
+function setHP(player, value) {
+  state.hp[player] = Math.max(0, Math.min(100, value));
+  document.getElementById(`p${player}-hp`).style.width = state.hp[player] + '%';
+  document.getElementById(`p${player}-hp-label`).textContent = state.hp[player];
+  if (state.hp[player] === 0) { stopMatch(); toast(`¡ROBOT 0${player} KO!`); }
+}
+
+// ─── EMERGENCY STOP ──────────────────────────────────────────────────────────
+function emergencyStop() {
+  stopMatch();
+  for (let p = 1; p <= 2; p++) {
+    const conn = state['robot' + p];
+    if (conn) {
+      fetch(`http://${conn.ip}:${conn.port}/stop`, { method: 'POST' }).catch(() => {});
+    }
+  }
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({ type: 'EMERGENCY_STOP' }));
+  }
+  toast('⚠ PARADA DE EMERGENCIA ENVIADA');
+}
+
+// ─── LOG ─────────────────────────────────────────────────────────────────────
+function logCmd(player, cmd) {
+  const log = document.getElementById(`log${player}`);
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-cmd p${player}">${cmd}</span>`;
+  log.prepend(entry);
+  // Keep last 60 entries
+  while (log.children.length > 60) log.removeChild(log.lastChild);
+}
+
+// ─── D-PAD FLASH ─────────────────────────────────────────────────────────────
+function flashDpad(player, cmd) {
+  const map = { UP:'up', DOWN:'down', LEFT:'left', RIGHT:'right' };
+  const id = `p${player}-${map[cmd]}`;
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('active');
+  setTimeout(() => el.classList.remove('active'), 120);
+}
+
+// ─── KEYBOARD INPUT ───────────────────────────────────────────────────────────
+const keyMap = {
+  // Player 1
+  'w':         { player: 1, cmd: 'UP'      },
+  's':         { player: 1, cmd: 'DOWN'    },
+  'a':         { player: 1, cmd: 'LEFT'    },
+  'd':         { player: 1, cmd: 'RIGHT'   },
+  'f':         { player: 1, cmd: 'PUNCH_L' },
+  'g':         { player: 1, cmd: 'PUNCH_R' },
+  'h':         { player: 1, cmd: 'KICK'    },
+  'v':         { player: 1, cmd: 'SPECIAL' },
+  // Player 2
+  'ArrowUp':   { player: 2, cmd: 'UP'      },
+  'ArrowDown': { player: 2, cmd: 'DOWN'    },
+  'ArrowLeft': { player: 2, cmd: 'LEFT'    },
+  'ArrowRight':{ player: 2, cmd: 'RIGHT'   },
+  '4':         { player: 2, cmd: 'PUNCH_L' },
+  '5':         { player: 2, cmd: 'PUNCH_R' },
+  '6':         { player: 2, cmd: 'KICK'    },
+  '0':         { player: 2, cmd: 'SPECIAL' },
+};
+
+document.addEventListener('keydown', (e) => {
+  const key = e.key;
+  if (state.pressedKeys.has(key)) return; // no repeat
+  state.pressedKeys.add(key);
+  const mapping = keyMap[key];
+  if (mapping) {
+    e.preventDefault();
+    sendCommand(mapping.player, mapping.cmd);
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  state.pressedKeys.delete(e.key);
+  // Send STOP for movement keys
+  const mapping = keyMap[e.key];
+  if (mapping && ['UP','DOWN','LEFT','RIGHT'].includes(mapping.cmd)) {
+    sendCommand(mapping.player, 'STOP_' + mapping.cmd);
+  }
+});
+
+// ─── BUTTON CLICK EVENTS ──────────────────────────────────────────────────────
+document.querySelectorAll('[data-cmd]').forEach(el => {
+  el.addEventListener('click', () => {
+    sendCommand(parseInt(el.dataset.player), el.dataset.cmd);
+  });
+  // Touch support
+  el.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    sendCommand(parseInt(el.dataset.player), el.dataset.cmd);
+  }, { passive: false });
+});
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+let toastTimeout;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ─── SIMULATE ROBOT TELEMETRY (demo) ─────────────────────────────────────────
+setInterval(() => {
+  ['1','2'].forEach(p => {
+    const bat = 75 + Math.round(Math.random() * 20);
+    const sig = 55 + Math.round(Math.random() * 35);
+    const tmp = 30 + Math.round(Math.random() * 25);
+    document.getElementById(`p${p}-battery`).style.width = bat + '%';
+    document.getElementById(`p${p}-bat-val`).textContent = bat + '%';
+    document.getElementById(`p${p}-signal`).style.width = sig + '%';
+    document.getElementById(`p${p}-sig-val`).textContent = sig + '%';
+    document.getElementById(`p${p}-temp`).style.width = tmp + '%';
+    document.getElementById(`p${p}-tmp-val`).textContent = tmp + '°';
+  });
+}, 3000);
+</script>
+</body>
+</html>
