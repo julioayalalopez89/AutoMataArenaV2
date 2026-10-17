@@ -20,7 +20,7 @@ robowar-server/
 │   ├── robotProxy.js    ← Envía comandos HTTP a las Pi
 │   └── logger.js        ← Logs en color
 ├── robot_pi.py          ← Corre en CADA Raspberry Pi
-├── .env                 ← Configuración (IPs, daño, etc.)
+├── .env.example         ← Plantilla de configuración (copiar a .env)
 └── package.json
 ```
 
@@ -28,10 +28,14 @@ robowar-server/
 
 ## 1. Instalar y arrancar el servidor Node.js
 
+Requiere Node.js 18.11 o superior.
+
 ```bash
-npm install
+cd server
+cp .env.example .env   # y ajusta las IPs de los robots
+npm ci
 npm start          # producción
-npm run dev        # desarrollo con hot-reload (nodemon)
+npm run dev        # desarrollo con recarga automática (node --watch)
 ```
 
 El servidor escucha en:
