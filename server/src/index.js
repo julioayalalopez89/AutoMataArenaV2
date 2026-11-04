@@ -10,6 +10,6 @@ logger.info(`
 ╔══════════════════════════════════════════╗
 ║          ROBOWAR SERVER v1.0             ║
 ║    WebSocket: ws://localhost:${PORT}        ║
-║    HTTP API:  http://localhost:${parseInt(process.env.HTTP_PORT)||9001}       ║
+║    HTTP API:  http://localhost:${PORT}        ║
 ╚══════════════════════════════════════════╝
 `);
