@@ -1,0 +1,37 @@
+{
+  "format": "echo-ai",
+  "version": 0,
+  "name": "ECHO starter",
+  "tick_ms": 100,
+  "rules": [
+    {
+      "name": "Cool down",
+      "when": [{ "sensor": "heat", "op": ">=", "value": 80 }],
+      "do": { "action": "move_back", "duration_ms": 400 }
+    },
+    {
+      "name": "Finish them",
+      "when": [
+        { "sensor": "enemy_hp", "op": "<", "value": 25 },
+        { "sensor": "enemy_distance", "op": "<", "value": 30 }
+      ],
+      "do": { "action": "special" }
+    },
+    {
+      "name": "Face the enemy (left)",
+      "when": [{ "sensor": "enemy_angle", "op": "<", "value": -20 }],
+      "do": { "action": "turn_left", "duration_ms": 150 }
+    },
+    {
+      "name": "Face the enemy (right)",
+      "when": [{ "sensor": "enemy_angle", "op": ">", "value": 20 }],
+      "do": { "action": "turn_right", "duration_ms": 150 }
+    },
+    {
+      "name": "Punch when close",
+      "when": [{ "sensor": "enemy_distance", "op": "<", "value": 20 }],
+      "do": { "action": "punch_right" }
+    }
+  ],
+  "default": { "action": "move_forward", "duration_ms": 200 }
+}
