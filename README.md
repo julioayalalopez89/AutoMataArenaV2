@@ -3,6 +3,8 @@
 ## Estructura
 ```
 robowar/
+├── game/                      ← Juego en Unity (ver game/README.md)
+├── docs/                      ← Diseño del juego y formato del programa de IA
 ├── robot-fight-control.html   ← Interfaz web (abre en el browser)
 ├── server/                    ← Servidor Node.js
 │   ├── src/
@@ -38,3 +40,6 @@ PLAYER_ID=1 ROBOT_PORT=8080 python3 robot_pi.py
 ```
 
 Para más detalles ver `server/README.md`.
+
+### 4. El juego (Unity)
+El juego de RoboWar vive en `game/`. Ver [`game/README.md`](game/README.md), el resumen de diseño en [`docs/game-design.md`](docs/game-design.md) y el formato del programa de IA compartido con la Raspberry Pi en [`docs/ai-program-format.md`](docs/ai-program-format.md).
